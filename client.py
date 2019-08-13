@@ -23,12 +23,17 @@ class Client:
                 clientSocket.close()
                 sys.exit()
 
+            if data.decode("cp949") == "":
+                continue
 
+            '''    
             if not data:
                 print('서버 (%s:%s)와의 연결이 끊어졌습니다.' % server_ip_port_info)
                 clientSocket.close()
                 sys.exit()
+            '''
 
+            
             if data[:2].decode("cp949") == 'cd':
             #만약 서버에서 보낸 요청에서 첫 문자가 cd 일 경우 
                 os.chdir(data[3:].decode("cp949"))

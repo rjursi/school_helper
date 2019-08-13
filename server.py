@@ -16,7 +16,7 @@ class Server:
         TestSocket = socket(AF_INET, SOCK_STREAM)
         TestSocket.connect(("gmail.com",80))
         self.server_ip = str(TestSocket.getsockname()[0]) # ip 값 만을 가져옴
-        print("서버 IP : %s" % self.server_ip)
+        # print("서버 IP : %s" % self.server_ip)
         
         TestSocket.close()
   
@@ -34,7 +34,7 @@ class Server:
             
             else:
                 while True:
-                    msg = input()
+                    msg = sys.stdin.readline()
                     
                     if msg == "quit":
                         print("[INFO][%s] 서버의 연결이 종료되었습니다." % ctime())
@@ -43,11 +43,12 @@ class Server:
                         serverSocket.close()
                         sys.exit()
                         
+                    if msg == "":
+                        continue
 
                     if msg:
                         
                         for socket_in_list in read_socket:
-                            
                             if socket_in_list != serverSocket:
                                 try:
                                     socket_in_list.send(msg.encode("cp949"))
@@ -59,11 +60,12 @@ class Server:
                                     continue
                         continue
                     
+                    '''
                     else:
                         read_socket.remove(sock)
                         sock.close()
                         print('[INFO][%s] 사용자와의 연결이 끊어졌습니다.' % ctime())
-                    
+                    '''
                     
         
     def __init__(self):
