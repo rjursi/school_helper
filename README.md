@@ -1,1 +1,1 @@
-# school_helper
+# remote shutdown ctrl

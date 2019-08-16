@@ -15,55 +15,110 @@ class Server:
         
         TestSocket = socket(AF_INET, SOCK_STREAM)
         TestSocket.connect(("gmail.com",80))
-        self.server_ip = str(TestSocket.getsockname()[0]) # ip 값 만을 가져옴
-        print("서버 IP : %s" % self.server_ip)
+        self.SERVER_IP = str(TestSocket.getsockname()[0]) # ip 값 만을 가져옴
+        # print("서버 IP : %s" % self.server_ip)
         
         TestSocket.close()
-  
+
+    def remote_command(self, msg, read_socket, serverSocket):
+        for socket_in_list in read_socket:
+            if socket_in_list != serverSocket:
+                
+                msg = " ".join(msg)
+                try:
+                    socket_in_list.send(msg.encode("cp949"))
+
+                except ConnectionResetError:
+                    print("%d : 해당 클라이언트와의 연결이 끊어졌습니다." % read_socket.index(socket_in_list))
+                    socket_in_list.close()
+                    del read_socket[1]
+                    continue
+
+
+                    
+    def client_macAddr_append(self,clientMacAddr):
+        macAddr_listFile = open("./client_macAddr_list.txt",'r')
+        
+        while True:
+            line = macAddr_listFile.readline().strip()
+            if not line:
+                break
+
+            
+            if line == clientMacAddr:
+                return
+            else:
+                continue
+
+            
+            
+        
+        macAddr_listFile = open("./client_macAddr_list.txt",'a')
+        macAddr_listFile.write(clientMacAddr + "\n")
+        macAddr_listFile.close()
+
+
     def client_connect(self, read_socket, serverSocket):
+
         print(read_socket)
         for sock in read_socket:
             if sock == serverSocket:
                 clientSocket, addr_info = serverSocket.accept()
                 read_socket.append(clientSocket)
                 
-                print('[INFO][%s] 클라이언트(%s) 가 새롭게 연결되었습니다.' % (ctime(), addr_info[0]))
+                print('[INFO][%s] 클라이언트(%s) 가 연결되었습니다.' % (ctime(), addr_info[0]))
+                clientMacAddr = clientSocket.recv(self.BUFSIZE).decode("cp949")
+        
+                print(clientMacAddr)
+
+                self.client_macAddr_append(clientMacAddr)
                 continue
             
                 # 리스트에서 소켓 리스트를 읽음, 그러나 serverSocket밖에 없다면 clientSocket를 새로 추가함
-            
+                
+                
+                
             else:
                 while True:
-                    msg = input()
+                    try:
+                        msg = sys.stdin.readline().split()
+                    except IndexError:
+                        continue
                     
-                    if msg == "quit":
-                        print("[INFO][%s] 서버의 연결이 종료되었습니다." % ctime())
+                    # print(msg)
+                    # 공백, 엔터등을 기준으로 나누어 리스트 생성, 그거의 첫번째 원소
+
+                    if not msg: # 명령 리스트가 비어있으면
+                        continue
+
+                    if msg[0] == "quit":
+                        # print(read_socket)
+                        if read_socket:
+                            self.remote_command(msg, read_socket, serverSocket)
+                        elif not read_socket:
+                            pass
+
+
+                        # 클라이언트 단에서 먼저 종료
+
+
                         sock.close()
-                        read_socket.remove(sock)
+                        for sock in read_socket:
+                            if not read_socket:
+                                break   
+                            else:
+                                read_socket.remove(sock)
+                        
                         serverSocket.close()
+                        print("[INFO][%s] 서버의 연결이 종료되었습니다." % ctime())
                         sys.exit()
                         
+                    
 
                     if msg:
                         
-                        for socket_in_list in read_socket:
-                            
-                            if socket_in_list != serverSocket:
-                                try:
-                                    socket_in_list.send(msg.encode("cp949"))
-                                    
-                                except Exception as e:
-                                    print(e.message)
-                                    socket_in_list.close()
-                                    read_socket.remove(socket_in_list)
-                                    continue
+                        self.remote_command(msg, read_socket, serverSocket) 
                         continue
-                    
-                    else:
-                        read_socket.remove(sock)
-                        sock.close()
-                        print('[INFO][%s] 사용자와의 연결이 끊어졌습니다.' % ctime())
-                    
                     
         
     def __init__(self):
@@ -113,6 +168,8 @@ class Server:
                 # 클라이언트가 접속할 때에만 각 클라이언트에 적합한 작업을 수행
 
                 self.client_connect(read_socket, serverSocket)
+
+
             except KeyboardInterrupt:
                 print("Ctrl + C 입력으로 인한 종료")
                 serverSocket.close()
