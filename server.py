@@ -1,14 +1,26 @@
 from socket import *
 from select import *
 from time import ctime
+from time import sleep
 import sys
+import threading
+import struct
+import os
+from multiprocessing.pool import ThreadPool
 
 
-class Server:
+
+class Server():
+    
+
     SERVER_IP = ''
     SERVER_PORT = 12345
     BUFSIZE = 1024
 
+    CONNECTION_LIST = []
+    CLIENT_CNT = 0
+    
+ 
 
     def getHostIP(self):
         # 호스트의 IP 주소만을 얻기위한 함수
@@ -20,25 +32,36 @@ class Server:
         
         TestSocket.close()
 
-    def remote_command(self, msg, read_socket, serverSocket):
-        for socket_in_list in read_socket:
-            if socket_in_list != serverSocket:
+    def remote_command(self, msg):
+        for socket_in_list in self.CONNECTION_LIST:
+            if socket_in_list != self.CONNECTION_LIST[0]:
                 
                 msg = " ".join(msg)
                 try:
                     socket_in_list.send(msg.encode("cp949"))
 
                 except ConnectionResetError:
-                    print("%d : 해당 클라이언트와의 연결이 끊어졌습니다." % read_socket.index(socket_in_list))
+                    print("%d : 해당 클라이언트와의 연결이 끊어졌습니다." % self.CONNECTION_LIST.index(socket_in_list))
                     socket_in_list.close()
-                    del read_socket[1]
+                    del self.CONNECTION_LIST[self.CONNECTION_LIST.index(socket_in_list)]
                     continue
+            else:
+                continue
+
 
 
                     
     def client_macAddr_append(self,clientMacAddr):
-        macAddr_listFile = open("./client_macAddr_list.txt",'r')
-        
+        try:
+            macAddr_listFile = open("./client_macAddr_list.txt",'r')
+            
+        except FileNotFoundError:
+            macAddr_listFile = open("./client_macAddr_list.txt",'w')
+            macAddr_listFile.close()
+
+            macAddr_listFile = open("./client_macAddr_list.txt",'r')
+
+
         while True:
             line = macAddr_listFile.readline().strip()
             if not line:
@@ -50,79 +73,134 @@ class Server:
             else:
                 continue
 
-            
-            
-        
         macAddr_listFile = open("./client_macAddr_list.txt",'a')
         macAddr_listFile.write(clientMacAddr + "\n")
         macAddr_listFile.close()
 
 
-    def client_connect(self, read_socket, serverSocket):
 
-        print(read_socket)
-        for sock in read_socket:
-            if sock == serverSocket:
+
+    def createSocketThread(self, serverSocket):
+
+
+        if serverSocket:
+            try:
                 clientSocket, addr_info = serverSocket.accept()
-                read_socket.append(clientSocket)
-                
-                print('[INFO][%s] 클라이언트(%s) 가 연결되었습니다.' % (ctime(), addr_info[0]))
-                clientMacAddr = clientSocket.recv(self.BUFSIZE).decode("cp949")
-        
-                print(clientMacAddr)
-
-                self.client_macAddr_append(clientMacAddr)
-                continue
+            except OSError:
+                return
             
-                # 리스트에서 소켓 리스트를 읽음, 그러나 serverSocket밖에 없다면 clientSocket를 새로 추가함
-                
-                
-                
-            else:
-                while True:
-                    try:
-                        msg = sys.stdin.readline().split()
-                    except IndexError:
-                        continue
+            self.CONNECTION_LIST.append(clientSocket)
+
+            self.CLIENT_CNT += 1
+
+            newClientSockThread = threading.Thread(target = self.createSocketThread, args = (serverSocket, ))
+            newClientSockThread.daemon = True
+            newClientSockThread.start() 
+            
+            # 백그라운드 프로세스 시작
+            # 백그라운드에서 다른 클라이언트가 연결 되기를 대기
+
+            print(self.CONNECTION_LIST)
                     
-                    # print(msg)
+            print('[INFO][%s] 클라이언트(%s) 가 연결되었습니다.' % (ctime(), addr_info[0]))
+            clientMacAddr = clientSocket.recv(self.BUFSIZE).decode("cp949")
+
+            print(clientMacAddr)
+
+            self.client_macAddr_append(clientMacAddr)
+
+  
+
+    def client_connect(self, serverSocket):
+        
+        for sock in self.CONNECTION_LIST:
+            
+            if self.CLIENT_CNT == 0:
+
+
+                if serverSocket:
+
+                    try:
+                        clientSocket, addr_info = serverSocket.accept()
+                    except OSError:
+                        return 0
+                    # 연결이 되기를 기다림, 연결이 되면 다음 코드로 넘어감
+
+                    self.CONNECTION_LIST.append(clientSocket)
+                    self.CLIENT_CNT += 1
+
+
+                    newClientSockThread = threading.Thread(target = self.createSocketThread, args = (serverSocket, ))
+                    newClientSockThread.daemon = True
+                    newClientSockThread.start() 
+                    
+                    # 백그라운드 프로세스 시작
+                    # 백그라운드에서 다른 클라이언트가 연결 되기를 대기
+
+
+                    # 공통 소켓 리스트에서 다른 클라이언트 소켓 리스트에 지속적으로 저장
+
+                    print('[INFO][%s] 클라이언트(%s) 가 연결되었습니다.' % (ctime(), addr_info[0]))
+                    clientMacAddr = clientSocket.recv(self.BUFSIZE).decode("cp949")
+                
+                    print(clientMacAddr)
+
+                    self.client_macAddr_append(clientMacAddr)
+
+                
+            else: # 서버 소켓이 아닌 다른 클라이언트 소켓일 경우
+
+                try:
+                    msg = sys.stdin.readline().split()
+    
+                except IndexError:
+                    continue
+                    
+                   
                     # 공백, 엔터등을 기준으로 나누어 리스트 생성, 그거의 첫번째 원소
 
-                    if not msg: # 명령 리스트가 비어있으면
-                        continue
+                print(msg)
 
-                    if msg[0] == "quit":
-                        # print(read_socket)
-                        if read_socket:
-                            self.remote_command(msg, read_socket, serverSocket)
-                        elif not read_socket:
-                            pass
+                if not msg: # 명령 리스트가 비어있으면
+                    continue
+
+                if msg[0] == "quit":
+                    # print(read_socket)
+                    if self.CONNECTION_LIST:
+                        self.remote_command(msg)
+                    elif not self.CONNECTION_LIST:
+                        pass
 
 
-                        # 클라이언트 단에서 먼저 종료
+                    # 클라이언트 단에서 먼저 종료
 
+                    sock.close()
 
-                        sock.close()
-                        for sock in read_socket:
-                            if not read_socket:
-                                break   
+                    for sock in self.CONNECTION_LIST:
+                        if not self.CONNECTION_LIST:
+                            break   
+                        else:
+                            if self.CONNECTION_LIST.index(sock) != serverSocket:
+                                self.CONNECTION_LIST.remove(sock)
                             else:
-                                read_socket.remove(sock)
-                        
-                        serverSocket.close()
-                        print("[INFO][%s] 서버의 연결이 종료되었습니다." % ctime())
-                        sys.exit()
-                        
+                                continue
                     
+                    serverSocket.close()
+                    del self.CONNECTION_LIST[0]
+                    print("[INFO][%s] 서버의 연결이 종료되었습니다." % ctime())
 
-                    if msg:
-                        
-                        self.remote_command(msg, read_socket, serverSocket) 
-                        continue
+                    self.CLIENT_CNT = 0
+                    return 0 
+
                     
-        
-    def __init__(self):
-        
+                if msg:
+                    
+                    self.remote_command(msg) 
+                    continue
+
+
+    def cmdServer(self):
+
         self.getHostIP()
 
         #현재 서버의 IP 수집
@@ -137,47 +215,110 @@ class Server:
         serverSocket.bind(server_ip_port)
         # 서버 IP 와 Port 할당
         
-        serverSocket.listen(50)
-        
-        # 50개의 호스트의 요청을 기다림
+        serverSocket.listen()
+    
 
-        connection_list = [serverSocket]
+        self.CONNECTION_LIST.append(serverSocket)
+        
+
+
     
         # 클라이언트들이 연결되는 리스트
 
         print("====================================")
         print("서버 IP  : %s\n" % self.SERVER_IP)
         print("Port : %s\n" % self.SERVER_PORT)
+        # print("quit 를 입력하면 서버 모드를 종료합니다.")
         print("접속을 기다립니다.")
         print("====================================")
         
-        while connection_list:
+
+        while self.CONNECTION_LIST:
         # 클라이언트의 응답을 계속 받을 수 있도록 무한루프로 동작
+            
+            quit_flag = self.client_connect(serverSocket)
+            if quit_flag == 0:
+                break
+
         
-            try:
+            
                 
-                read_socket, write_socket, error_socket = select(connection_list, [], [], 10)
-                # select 로 요청을 받고, 10초마다 블럭킹을 해제하도록 함
-                # I/O 다중화 구현할 때 select 이용
-
-                # 즉 10초마다 다른 소켓에 클라이언트가 접속이 되었는지 체크하는 것을 말함
-
-                # select 함수에서 자체적으로 3개의 값을 return 을 하며, 각각 3개의 소켓을 반환함
-                # connection_list 를 매개변수로 넣었는데, 여기 리스트에 있는 소켓중 하나에 접속이 발생할때까지 대기
-                # 접속이 되기 전까지는 block 상태
-                # 클라이언트가 접속할 때에만 각 클라이언트에 적합한 작업을 수행
-
-                self.client_connect(read_socket, serverSocket)
 
 
-            except KeyboardInterrupt:
-                print("Ctrl + C 입력으로 인한 종료")
-                serverSocket.close()
+    def onOffSelect(self):
+        print(('=' * 70) + "\n\n \t\t강의실 컴퓨터 On / OFF 프로그램\n\n" + ('=' * 70))
+        print("수행할 작업을 선택해주세요.")
+        
+        print("1. 컴퓨터 ON\n2. 컴퓨터 OFF\n3. 프로그램 종료")
 
-                sys.exit()
-                 
+        optionSelect = sys.stdin.readline().strip()
+        
+        os.system('cls')
+
+        return optionSelect
+
+
+
+    
+    def wolServer(self):
+        
+        comCount = 0
+
+        comMacAddList = open("./client_macAddr_list.txt", 'r')
+
+        print("컴퓨터를 킵니다.")
+
+        while True:
+            line = comMacAddList.readline().strip()
+            # print(line)
+            
+            if not line:
+                break
+            
+            macAddr = line.split('-')
+
+            hw_macAddr = struct.pack("BBBBBB",int(macAddr[0],16),
+            int(macAddr[1],16),int(macAddr[2],16),int(macAddr[3],16),
+            int(macAddr[4],16),int(macAddr[5],16)
+            )
+
+
+            magicPacket = b"\xFF" * 6 + hw_macAddr * 16
+
+            print(magicPacket)
+            sock = socket(AF_INET, SOCK_DGRAM)
+            sock.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
+            sock.sendto(magicPacket, ('192.168.0.255',7))
+            sock.close()
+
+        print("모든 컴퓨터 부팅을 완료하였습니다.")
+
+        sleep(1)
+
+        os.system('cls')
+            
+
 if __name__ == "__main__":
 
     CtlServer = Server() # 서버 객체 생성
-   
+
+    
+    while True:
+        optionSelect = CtlServer.onOffSelect()
+
+
+        if optionSelect == '1':
+            CtlServer.wolServer()
+        elif optionSelect == '2':
+            CtlServer.cmdServer()
+        elif optionSelect == '3':
+            print("강의실 컴퓨터 제어 프로그램을 종료합니다.")
+            break
+
+    sys.exit()
+
+
+
+
+    
     

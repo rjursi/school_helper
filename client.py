@@ -4,7 +4,7 @@ import subprocess
 import sys
 from select import *
 from time import ctime
-from time import sleep
+
 
 
 class Client:
@@ -135,6 +135,8 @@ class Client:
         
         setting_file.close()
 
+        
+
 
 
 
@@ -160,10 +162,6 @@ class Client:
         
             
 
-        
-
-
-            
     def connectToServer(self):
         server_ip_port = []
        
@@ -186,34 +184,18 @@ class Client:
         self.SERVER_IP_PORT_INFO = tuple(server_ip_port)
         print(self.SERVER_IP_PORT_INFO)
         
-        try:
+        clientConnectFlag = False
+        
+        while not clientConnectFlag:
+            try:
+                flag = self.CLIENT_SOCKET.connect(self.SERVER_IP_PORT_INFO)
 
-            self.CLIENT_SOCKET.connect(self.SERVER_IP_PORT_INFO)
+                if flag == None:
+                    break
+            except ConnectionRefusedError:
+                continue
 
 
-        except Exception as e:
-            print('현재 서버(%s:%s) 에 연결할 수 없습니다. \n' % self.SERVER_IP_PORT_INFO)
-
-            '''
-            print('10 번의 재접속을 시도합니다.')
-            
-            for cnt in range(1, 10):
-                print('.', end = '')
-
-                try:
-                    flag = self.CLIENT_SOCKET.connect(self.SERVER_IP_PORT_INFO)
-                
-                    if flag == 'None':
-                        break
-                    sleep(5)
-
-                except ConnectionRefusedError:
-                    continue
-                    
-                if cnt == 9:
-                    print('현재 서버(%s:%s) 에 연결할 수 없습니다. \n서버 상태를 확인바랍니다.' % self.SERVER_IP_PORT_INFO)
-                    sys.exit()
-            '''
 
         print('서버(%s:%s) 에 연결 되었습니다.' % self.SERVER_IP_PORT_INFO)
         
@@ -239,15 +221,12 @@ class Client:
     def __init__(self):
         
         self.CLIENT_SOCKET = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        
 
         # 클라이언트 소켓 생성
         self.CLIENT_MACADDR = self.getMacAddress()
         # 클라이언트 맥 주소 수집
         # 클라이언트가 설치 될때 수집
-
-
-
-
 
     
 if __name__ == "__main__":
@@ -260,10 +239,6 @@ if __name__ == "__main__":
     Client.connectToServer()
 
    
-
-    
-    # print(clientMacAddr)
-
     
 
     
